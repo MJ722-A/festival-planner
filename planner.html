@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>최적 동선 추천 & Firebase 공유</title>
+  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=0e6f195fbc698aab2f359bd9bbb6a721"></script>
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; margin: 20px; line-height: 1.6; }
+    .layout { display: flex; gap: 20px; }
+    .panel { flex: 1; }
+    #map { width: 100%; height: 500px; border-radius: 8px; border: 1px solid #ccc; }
+    .route-option { border: 2px solid #333; padding: 15px; margin-bottom: 20px; border-radius: 8px; }
+    .share-box { background-color: #f0f4f8; border: 1px solid #bce; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .share-input { width: 70%; padding: 8px; font-size: 14px; }
+    .btn { padding: 8px 16px; font-size: 14px; cursor: pointer; border-radius: 4px; border: none; }
+    .btn-primary { background-color: #2196f3; color: white; }
+    .btn-success { background-color: #4caf50; color: white; }
+  </style>
+</head>
+<body>
+  <h1>🗺️ 선택한 축제 최적 동선 가이드</h1>
+  <button class="btn" onclick="location.href='index.html'">← 축제 다시 선택하기</button>
+  <hr>
+
+  <div class="share-box">
+    <h3>🔗 친구에게 동선 공유하기</h3>
+    <button id="saveBtn" class="btn btn-primary" onclick="saveScheduleToFirebase()">이 일정 저장 및 공유 링크 만들기</button>
+    <div id="shareResult" style="display: none; margin-top: 10px;">
+      <input type="text" id="shareUrl" class="share-input" readonly>
+      <button class="btn btn-success" onclick="copyShareUrl()">링크 복사</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <div id="routesContainer"></div>
+    </div>
+    <div class="panel">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <!-- Firebase JS SDK v10 (ES Module) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, push, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // Firebase 구성 정보 입력
+    const firebaseConfig = {
+      apiKey: "bKR6aY6qaYIQHlk4FmgpMzj5M9VegU6mNAng4z12",
+      authDomain: "my-second-app-68acf.firebaseapp.com",
+      databaseURL: "https://my-second-app-68acf-default-rtdb.firebaseio.com/",
+      projectId: "my-second-app-68acf
+"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let festivals = [];
+    let map, polyline;
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      // Kakao 지도 초기화
+      const container = document.getElementById('map');
+      map = new kakao.maps.Map(container, { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 8 });
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const scheduleId = urlParams.get("id");
+
+      if (scheduleId) {
+        // [불러오기] URL 파라미터가 있을 경우 Firebase에서 데이터 로드
+        document.getElementById("routesContainer").innerText = "공유된 동선을 불러오는 중...";
+        festivals = await loadScheduleFromFirebase(scheduleId);
+        if (!festivals || festivals.length === 0) {
+          alert("존재하지 않는 일정입니다.");
+          location.href = "index.html";
+          return;
+        }
+      } else {
+        // [기본] LocalStorage에서 로드
+        festivals = JSON.parse(localStorage.getItem("selectedFestivals") || "[]");
+        if (festivals.length === 0) {
+          alert("선택된 축제가 없습니다.");
+          location.href = "index.html";
+          return;
+        }
+      }
+
+      generateRouteCandidates();
+    });
+
+    // Firebase 데이터 저장 및 공유 링크 생성
+    window.saveScheduleToFirebase = async function() {
+      if (festivals.length === 0) return;
+      const saveBtn = document.getElementById("saveBtn");
+      saveBtn.disabled = true;
+      saveBtn.innerText = "저장 중...";
+
+      try {
+        const optimized = calculateOptimizedOrder(festivals);
+        const newRef = push(ref(db, "schedules"));
+        
+        await set(newRef, {
+          createdAt: new Date().toISOString(),
+          items: optimized
+        });
+
+        const shareUrl = `${window.location.origin}${window.location.pathname}?id=${newRef.key}`;
+        document.getElementById("shareUrl").value = shareUrl;
+        document.getElementById("shareResult").style.display = "block";
+        saveBtn.innerText = "저장 완료!";
+      } catch (err) {
+        alert("저장 실패: " + err.message);
+        saveBtn.disabled = false;
+      }
+    };
+
+    async function loadScheduleFromFirebase(id) {
+      try {
+        const snapshot = await get(child(ref(db), `schedules/${id}`));
+        return snapshot.exists() ? snapshot.val().items : null;
+      } catch (err) { return null; }
+    }
+
+    window.copyShareUrl = function() {
+      const copyText = document.getElementById("shareUrl");
+      copyText.select();
+      navigator.clipboard.writeText(copyText.value);
+      alert("공유 링크가 클립보드에 복사되었습니다!");
+    };
+
+    // Haversine 알고리즘 (직선거리 km 계산)
+    function getDistanceKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    }
+
+    // 최근접 이웃(Nearest Neighbor) 알고리즘으로 최적 순서 재정렬
+    function calculateOptimizedOrder(items) {
+      if (items.length <= 1) return items;
+      let unvisited = [...items];
+      let current = unvisited.shift();
+      let route = [current];
+
+      while (unvisited.length > 0) {
+        let nearestIdx = 0, minDistance = Infinity;
+        for (let i = 0; i < unvisited.length; i++) {
+          let dist = getDistanceKm(current.mapy, current.mapx, unvisited[i].mapy, unvisited[i].mapx);
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearestIdx = i;
+          }
+        }
+        current = unvisited.splice(nearestIdx, 1)[0];
+        route.push(current);
+      }
+      return route;
+    }
+
+    function generateRouteCandidates() {
+      const optimizedRoute = calculateOptimizedOrder(festivals);
+      const container = document.getElementById("routesContainer");
+
+      let totalDist = 0;
+      for (let i = 0; i < optimizedRoute.length - 1; i++) {
+        totalDist += getDistanceKm(optimizedRoute[i].mapy, optimizedRoute[i].mapx, optimizedRoute[i+1].mapy, optimizedRoute[i+1].mapx);
+      }
+
+      drawMapPath(optimizedRoute);
+
+      const candidates = [
+        { mode: "🚶 도보 추천 동선", speed: 4, desc: "축제장 간의 정취를 즐기며 이동하는 동선" },
+        { mode: "🚌 대중교통 추천 동선", speed: 20, desc: "주변 대중교통 이용을 고려한 효율적 동선" },
+        { mode: "🚗 자차/택시 추천 동선", speed: 40, desc: "이동 시간을 최대한 단축하는 최단 동선" }
+      ];
+
+      container.innerHTML = "";
+      candidates.forEach(cand => {
+        const estMinutes = Math.round((totalDist / cand.speed) * 60);
+        const card = document.createElement("div");
+        card.className = "route-option";
+        
+        let stepsHtml = optimizedRoute.map((item, idx) => 
+          `<li><strong>${idx + 1}순위:</strong> ${item.title}</li>`
+        ).join("");
+
+        card.innerHTML = `
+          <h2>${cand.mode}</h2>
+          <p>${cand.desc}</p>
+          <p><strong>예상 이동거리:</strong> 약 ${totalDist.toFixed(2)} km</p>
+          <p><strong>소요시간:</strong> 약 ${estMinutes}분</p>
+          <ol>${stepsHtml}</ol>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // 지도 상에 순서 마커 및 연결 선(Polyline) 표시
+    function drawMapPath(route) {
+      const linePath = [];
+      const bounds = new kakao.maps.LatLngBounds();
+
+      route.forEach((item, idx) => {
+        const loc = new kakao.maps.LatLng(item.mapy, item.mapx);
+        linePath.push(loc);
+        bounds.extend(loc);
+
+        // 마커 표시
+        new kakao.maps.Marker({
+          position: loc,
+          map: map,
+          title: `${idx + 1}. ${item.title}`
+        });
+      });
+
+      // 경로 선 그리기
+      if (polyline) polyline.setMap(null);
+      polyline = new kakao.maps.Polyline({
+        path: linePath,
+        strokeWeight: 5,
+        strokeColor: '#FF0000',
+        strokeOpacity: 0.8,
+        strokeStyle: 'solid'
+      });
+      polyline.setMap(map);
+      map.setBounds(bounds);
+    }
+  </script>
+</body>
+</html>
