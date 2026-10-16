@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>최적 동선 추천 & Firebase 공유</title>
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=0e6f195fbc698aab2f359bd9bbb6a721"></script>
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0e6f195fbc698aab2f359bd9bbb6a721"></script>
   <style>
     body { font-family: 'Noto Sans KR', sans-serif; margin: 20px; line-height: 1.6; }
     .layout { display: flex; gap: 20px; }
@@ -45,13 +45,12 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, push, set, get, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // Firebase 구성 정보 입력
+    // Firebase 구성 정보
     const firebaseConfig = {
       apiKey: "bKR6aY6qaYIQHlk4FmgpMzj5M9VegU6mNAng4z12",
       authDomain: "my-second-app-68acf.firebaseapp.com",
       databaseURL: "https://my-second-app-68acf-default-rtdb.firebaseio.com/",
-      projectId: "my-second-app-68acf
-"
+      projectId: "my-second-app-68acf"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -61,36 +60,36 @@
     let map, polyline;
 
     window.addEventListener("DOMContentLoaded", async () => {
-      // Kakao 지도 초기화
-      const container = document.getElementById('map');
-      map = new kakao.maps.Map(container, { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 8 });
+      if (typeof kakao !== 'undefined' && kakao.maps) {
+        kakao.maps.load(async () => {
+          const container = document.getElementById('map');
+          map = new kakao.maps.Map(container, { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 8 });
 
-      const urlParams = new URLSearchParams(window.location.search);
-      const scheduleId = urlParams.get("id");
+          const urlParams = new URLSearchParams(window.location.search);
+          const scheduleId = urlParams.get("id");
 
-      if (scheduleId) {
-        // [불러오기] URL 파라미터가 있을 경우 Firebase에서 데이터 로드
-        document.getElementById("routesContainer").innerText = "공유된 동선을 불러오는 중...";
-        festivals = await loadScheduleFromFirebase(scheduleId);
-        if (!festivals || festivals.length === 0) {
-          alert("존재하지 않는 일정입니다.");
-          location.href = "index.html";
-          return;
-        }
-      } else {
-        // [기본] LocalStorage에서 로드
-        festivals = JSON.parse(localStorage.getItem("selectedFestivals") || "[]");
-        if (festivals.length === 0) {
-          alert("선택된 축제가 없습니다.");
-          location.href = "index.html";
-          return;
-        }
+          if (scheduleId) {
+            document.getElementById("routesContainer").innerText = "공유된 동선을 불러오는 중...";
+            festivals = await loadScheduleFromFirebase(scheduleId);
+            if (!festivals || festivals.length === 0) {
+              alert("존재하지 않는 일정입니다.");
+              location.href = "index.html";
+              return;
+            }
+          } else {
+            festivals = JSON.parse(localStorage.getItem("selectedFestivals") || "[]");
+            if (festivals.length === 0) {
+              alert("선택된 축제가 없습니다.");
+              location.href = "index.html";
+              return;
+            }
+          }
+
+          generateRouteCandidates();
+        });
       }
-
-      generateRouteCandidates();
     });
 
-    // Firebase 데이터 저장 및 공유 링크 생성
     window.saveScheduleToFirebase = async function() {
       if (festivals.length === 0) return;
       const saveBtn = document.getElementById("saveBtn");
@@ -130,7 +129,6 @@
       alert("공유 링크가 클립보드에 복사되었습니다!");
     };
 
-    // Haversine 알고리즘 (직선거리 km 계산)
     function getDistanceKm(lat1, lon1, lat2, lon2) {
       const R = 6371;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -139,7 +137,6 @@
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
     }
 
-    // 최근접 이웃(Nearest Neighbor) 알고리즘으로 최적 순서 재정렬
     function calculateOptimizedOrder(items) {
       if (items.length <= 1) return items;
       let unvisited = [...items];
@@ -199,7 +196,6 @@
       });
     }
 
-    // 지도 상에 순서 마커 및 연결 선(Polyline) 표시
     function drawMapPath(route) {
       const linePath = [];
       const bounds = new kakao.maps.LatLngBounds();
@@ -209,7 +205,6 @@
         linePath.push(loc);
         bounds.extend(loc);
 
-        // 마커 표시
         new kakao.maps.Marker({
           position: loc,
           map: map,
@@ -217,7 +212,6 @@
         });
       });
 
-      // 경로 선 그리기
       if (polyline) polyline.setMap(null);
       polyline = new kakao.maps.Polyline({
         path: linePath,
