@@ -2,203 +2,626 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전국 축제 플래너 - 축제 탐색</title>
-  <!-- https: 명시 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
   <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=3ffc43680242696881c377feba08bf5e"></script>
   <style>
-    body { font-family: 'Noto Sans KR', sans-serif; margin: 20px; }
-    .container { display: flex; gap: 20px; }
-    .left-panel { flex: 1; max-height: 80vh; overflow-y: auto; }
-    .right-panel { flex: 1; }
-    #map { width: 100%; height: 500px; border-radius: 8px; border: 1px solid #ccc; }
-    .festival-card { border: 1px solid #e0e0e0; padding: 12px; margin-bottom: 10px; border-radius: 8px; }
-    .festival-card.selected { background-color: #e3f2fd; border-color: #2196f3; }
-    .btn { padding: 8px 16px; font-size: 14px; cursor: pointer; border-radius: 4px; border: none; }
-    .btn-primary { background-color: #2196f3; color: white; }
+    :root {
+      --blue-50: #EFF6FF;
+      --blue-100: #DBEAFE;
+      --blue-200: #BFDBFE;
+      --blue-500: #3B82F6;
+      --blue-600: #2563EB;
+      --blue-700: #1D4ED8;
+      --text: #0F172A;
+      --sub: #475569;
+      --muted: #94A3B8;
+      --line: #E2E8F0;
+      --bg: #F4F7FD;
+      --white: #FFFFFF;
+      --green: #16A34A;
+      --radius: 14px;
+      --shadow: 0 2px 10px rgba(37, 99, 235, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Noto Sans KR', -apple-system, 'Segoe UI', sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+    input { font-family: inherit; }
+
+    /* 공통 아이콘 (선 스타일 통일) */
+    .ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .ic-sm { width: 14px; height: 14px; }
+    .ic-lg { width: 22px; height: 22px; }
+
+    /* 앱 레이아웃 */
+    .app { display: flex; flex-direction: column; height: 100dvh; }
+
+    /* 헤더 */
+    .header {
+      background: var(--blue-600);
+      color: #fff;
+      padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-logo {
+      width: 38px; height: 38px; border-radius: 12px;
+      background: rgba(255,255,255,0.18);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .brand h1 { font-size: 18px; font-weight: 900; letter-spacing: -0.3px; }
+    .brand p { font-size: 12px; opacity: 0.85; margin-top: 1px; }
+    .header-count {
+      font-size: 13px; background: rgba(255,255,255,0.18);
+      padding: 6px 12px; border-radius: 999px; display: flex; align-items: center; gap: 6px;
+    }
+
+    /* 필터 바 */
+    .toolbar {
+      background: var(--white);
+      border-bottom: 1px solid var(--line);
+      padding: 12px 20px;
+      display: flex; flex-direction: column; gap: 10px;
+      flex-shrink: 0;
+    }
+    .toolbar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .toolbar-label { font-size: 12px; font-weight: 700; color: var(--muted); width: 34px; flex-shrink: 0; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 500;
+      background: var(--bg); color: var(--sub); border: 1px solid transparent;
+      white-space: nowrap; transition: all .15s;
+    }
+    .chip:hover { background: var(--blue-50); color: var(--blue-600); }
+    .chip.active { background: var(--blue-600); color: #fff; font-weight: 700; box-shadow: 0 2px 8px rgba(37,99,235,.3); }
+
+    .segment { display: inline-flex; background: var(--bg); padding: 4px; border-radius: 12px; gap: 2px; }
+    .segment button { padding: 7px 18px; border-radius: 9px; font-size: 14px; font-weight: 500; color: var(--sub); transition: all .15s; }
+    .segment button.active { background: var(--white); color: var(--blue-600); font-weight: 700; box-shadow: 0 1px 4px rgba(15,23,42,.12); }
+
+    .search-box {
+      flex: 1; min-width: 180px; display: flex; align-items: center; gap: 8px;
+      background: var(--bg); border-radius: 12px; padding: 0 14px; height: 40px;
+      border: 1px solid transparent; color: var(--muted);
+    }
+    .search-box:focus-within { border-color: var(--blue-500); background: #fff; color: var(--blue-600); }
+    .search-box input { border: none; background: transparent; outline: none; flex: 1; font-size: 14px; color: var(--text); }
+
+    /* 메인 영역 */
+    .main { flex: 1; min-height: 0; display: grid; grid-template-columns: 440px 1fr; }
+    .list-pane { display: flex; flex-direction: column; min-height: 0; background: var(--bg); border-right: 1px solid var(--line); }
+    .list-head { padding: 14px 20px 8px; display: flex; align-items: center; justify-content: space-between; }
+    .list-head h2 { font-size: 15px; font-weight: 700; }
+    .list-head h2 em { font-style: normal; color: var(--blue-600); }
+    .status-chips { display: flex; gap: 6px; }
+    .status-chips button {
+      font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line);
+      background: #fff; color: var(--sub);
+    }
+    .status-chips button.active { background: var(--blue-50); color: var(--blue-600); border-color: var(--blue-200); font-weight: 700; }
+
+    .list-scroll { flex: 1; overflow-y: auto; padding: 4px 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+    .list-scroll > * { flex-shrink: 0; }   /* 카드가 눌려서 줄처럼 보이는 문제 방지 */
+
+    /* 축제 카드 */
+    .card {
+      background: var(--white); border-radius: var(--radius); border: 2px solid transparent;
+      box-shadow: var(--shadow); overflow: hidden; display: flex; cursor: pointer; flex-shrink: 0; min-height: 124px;
+      transition: transform .15s, border-color .15s;
+    }
+    .card:hover { transform: translateY(-2px); }
+    .card.focused { border-color: var(--blue-200); }
+    .card.selected { border-color: var(--blue-600); background: var(--blue-50); }
+    .thumb {
+      width: 112px; flex-shrink: 0; background: linear-gradient(135deg, var(--blue-100), var(--blue-200));
+      display: flex; align-items: center; justify-content: center; color: var(--blue-600); position: relative;
+    }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
+    .card-body { flex: 1; padding: 12px 14px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .badge-row { display: flex; gap: 6px; align-items: center; }
+    .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; }
+    .badge.live { background: #DCFCE7; color: var(--green); }
+    .badge.soon { background: var(--blue-100); color: var(--blue-700); }
+    .badge.end { background: #F1F5F9; color: var(--muted); }
+    .badge.region { background: #F1F5F9; color: var(--sub); }
+    .card-title { font-size: 15px; font-weight: 700; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .meta { font-size: 12.5px; color: var(--sub); display: flex; align-items: flex-start; gap: 6px; }
+    .meta .ic { margin-top: 2px; color: var(--muted); }
+    .meta span { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+    .add-btn {
+      margin-top: auto; align-self: flex-end;
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 7px 12px; border-radius: 9px; font-size: 13px; font-weight: 700;
+      background: var(--blue-50); color: var(--blue-600); transition: all .15s;
+    }
+    .add-btn:hover { background: var(--blue-100); }
+    .card.selected .add-btn { background: var(--blue-600); color: #fff; }
+
+    /* 빈 / 로딩 상태 */
+    .state-box { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--blue-100); border-top-color: var(--blue-600); animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .skeleton { height: 112px; border-radius: var(--radius); background: linear-gradient(90deg, #E8EEF9 25%, #F4F7FD 50%, #E8EEF9 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* 지도 */
+    .map-pane { position: relative; min-height: 0; }
+    #map { width: 100%; height: 100%; }
+    .map-fallback { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; color: var(--muted); padding: 30px; background: var(--blue-50); font-size: 14px; line-height: 1.7; }
+
+    /* 모바일용 목록/지도 전환 */
+    .view-toggle { display: none; }
+
+    /* 하단 선택 바 */
+    .bottom-bar {
+      background: var(--white); border-top: 1px solid var(--line);
+      padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      flex-shrink: 0; box-shadow: 0 -4px 16px rgba(15,23,42,.05);
+    }
+    .selected-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .selected-count {
+      width: 40px; height: 40px; border-radius: 12px; background: var(--blue-50); color: var(--blue-600);
+      display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 17px; flex-shrink: 0;
+    }
+    .selected-text { min-width: 0; }
+    .selected-text strong { font-size: 14px; display: block; }
+    .selected-text span { font-size: 12.5px; color: var(--muted); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+    .btn-ghost { padding: 12px 14px; font-size: 13px; color: var(--sub); border-radius: 12px; }
+    .btn-ghost:hover { background: var(--bg); }
+    .btn-cta {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--blue-600); color: #fff; font-weight: 700; font-size: 15px;
+      padding: 13px 22px; border-radius: 12px; box-shadow: 0 4px 12px rgba(37,99,235,.35); transition: all .15s;
+    }
+    .btn-cta:hover { background: var(--blue-700); }
+    .btn-cta:disabled { background: var(--line); color: var(--muted); box-shadow: none; cursor: not-allowed; }
+
+    /* 토스트 */
+    .toast {
+      position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(20px);
+      background: #0F172A; color: #fff; padding: 11px 18px; border-radius: 999px; font-size: 13.5px;
+      opacity: 0; pointer-events: none; transition: all .25s; z-index: 50; max-width: 90vw; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* 지도 인포윈도우 */
+    .iw { padding: 8px 12px; font-size: 13px; font-weight: 700; color: var(--text); font-family: 'Noto Sans KR', sans-serif; white-space: nowrap; }
+
+    /* 반응형 */
+    @media (max-width: 900px) {
+      .header { padding: 12px 16px; }
+      .brand p { display: none; }
+      .toolbar { padding: 10px 16px; }
+      .main { grid-template-columns: 1fr; }
+      .list-pane { border-right: none; }
+      .main[data-view="list"] .map-pane { display: none; }
+      .main[data-view="map"] .list-pane { display: none; }
+      .view-toggle {
+        display: inline-flex; background: var(--bg); padding: 3px; border-radius: 10px; gap: 2px;
+      }
+      .view-toggle button { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 13px; color: var(--sub); }
+      .view-toggle button.active { background: #fff; color: var(--blue-600); font-weight: 700; box-shadow: 0 1px 4px rgba(15,23,42,.12); }
+      .list-scroll { padding: 4px 16px 20px; }
+      .list-head { padding: 12px 16px 8px; }
+      .bottom-bar { padding: 10px 16px; }
+      .btn-ghost { display: none; }
+      .btn-cta { padding: 12px 16px; font-size: 14px; }
+      .thumb { width: 96px; }
+    }
   </style>
 </head>
 <body>
-  <h1>🎡 11월/12월 축제 탐색하기</h1>
-  
-  <div style="margin-bottom: 20px;">
-    <label>지역 선택: </label>
-    <select id="areaSelect">
-      <option value="">전국</option>
-      <option value="11">서울</option>
-      <option value="26">부산</option>
-      <option value="41">경기</option>
-      <option value="51">강원</option>
-    </select>
+  <!-- 아이콘 스프라이트 -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <symbol id="i-festival" viewBox="0 0 24 24"><path d="M5.8 11.3 2 22l10.7-3.8"/><path d="M4 3h.01M22 8h.01M15 2h.01M22 20h.01"/><path d="m22 2-2.2.7a2.9 2.9 0 0 0-1.8 3.6l.1.3c.4 1.2.1 2.5-.8 3.4l-.3.3c-.9.9-2.2 1.2-3.4.8l-.3-.1a2.9 2.9 0 0 0-3.6 1.8L9 15"/><path d="M11 13 8 10"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+      <symbol id="i-map" viewBox="0 0 24 24"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16M16 6v16"/></symbol>
+      <symbol id="i-nav" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></symbol>
+    </defs>
+  </svg>
 
+  <div class="app">
+    <!-- 헤더 -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-logo"><svg class="ic ic-lg"><use href="#i-festival"/></svg></div>
+        <div>
+          <h1>전국 축제 플래너</h1>
+          <p>가고 싶은 축제를 담고, 최적 동선까지 한 번에</p>
+        </div>
+      </div>
+      <div class="header-count"><svg class="ic ic-sm"><use href="#i-calendar"/></svg><span id="headerMonth">11월</span> 축제</div>
+    </header>
 
-    <label>월 선택: </label>
-    <select id="monthSelect">
-      <option value="20261101">11월</option>
-      <option value="20261201">12월</option>
-    </select>
+    <!-- 필터 -->
+    <section class="toolbar">
+      <div class="toolbar-row">
+        <span class="toolbar-label">지역</span>
+        <div class="chips" id="regionChips"></div>
+      </div>
+      <div class="toolbar-row">
+        <span class="toolbar-label">월</span>
+        <div class="segment" id="monthSeg"></div>
+        <label class="search-box">
+          <svg class="ic"><use href="#i-search"/></svg>
+          <input type="text" id="keyword" placeholder="축제명 또는 주소로 검색">
+        </label>
+        <div class="view-toggle" id="viewToggle">
+          <button data-view="list" class="active"><svg class="ic ic-sm"><use href="#i-list"/></svg>목록</button>
+          <button data-view="map"><svg class="ic ic-sm"><use href="#i-map"/></svg>지도</button>
+        </div>
+      </div>
+    </section>
 
-    <button class="btn btn-primary" onclick="searchFestivals()">축제 검색</button>
+    <!-- 목록 + 지도 -->
+    <main class="main" id="main" data-view="list">
+      <section class="list-pane">
+        <div class="list-head">
+          <h2>검색 결과 <em id="count">0</em>개</h2>
+          <div class="status-chips" id="statusChips">
+            <button data-status="all" class="active">전체</button>
+            <button data-status="live">진행중</button>
+            <button data-status="soon">예정</button>
+          </div>
+        </div>
+        <div class="list-scroll" id="festivalList"></div>
+      </section>
+      <section class="map-pane">
+        <div id="map"></div>
+        <div class="map-fallback" id="mapFallback">지도를 불러오지 못했습니다.<br>카카오 개발자 센터의 JavaScript 키와 도메인 등록을 확인해 주세요.<br>(목록은 정상적으로 이용할 수 있습니다)</div>
+      </section>
+    </main>
+
+    <!-- 하단 선택 바 -->
+    <footer class="bottom-bar">
+      <div class="selected-info">
+        <div class="selected-count" id="cartCount">0</div>
+        <div class="selected-text">
+          <strong id="cartTitle">선택한 축제가 없어요</strong>
+          <span id="cartNames">카드의 '일정에 담기'를 눌러 추가해 보세요</span>
+        </div>
+      </div>
+      <div class="bar-actions">
+        <button class="btn-ghost" id="clearBtn" style="display:none">전체 해제</button>
+        <button class="btn-cta" id="goBtn" disabled>
+          <svg class="ic"><use href="#i-nav"/></svg>최적 동선 보기
+        </button>
+      </div>
+    </footer>
   </div>
 
-  <div class="container">
-    <div class="left-panel">
-      <h2>검색 결과 (<span id="count">0</span>개)</h2>
-      <div id="festivalList"></div>
-    </div>
-    <div class="right-panel">
-      <div id="map"></div>
-    </div>
-  </div>
-
-  <hr style="margin-top: 20px;">
-  <button class="btn btn-primary" onclick="goToPlanner()" style="padding: 12px 24px; font-size: 16px;">
-    선택한 축제로 최적 동선 보기 ( <span id="cartCount">0</span>개 선택됨 )
-  </button>
+  <div class="toast" id="toast"></div>
 
   <script>
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxOTCh8U13nQe0uRRfRRSVDGt-JQv26uyl4VPmS3HyqOKiglcHAcLdvmvS-t-sXqz0/exec";
-    let selectedFestivals = [];
-    let map, markers = [];
 
-    // kakao.maps.load를 활용한 안전한 지도 초기화
-    window.onload = function() {
-      if (typeof kakao !== 'undefined' && kakao.maps) {
-        kakao.maps.load(function() {
-          const container = document.getElementById('map');
-          const options = { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 8 };
-          map = new kakao.maps.Map(container, options);
+    const REGIONS = [
+      { code: "",   name: "전국" },
+      { code: "11", name: "서울" },
+      { code: "26", name: "부산" },
+      { code: "41", name: "경기" },
+      { code: "51", name: "강원" }
+    ];
+    const MONTHS = [
+      { value: "20261101", name: "11월" },
+      { value: "20261201", name: "12월" }
+    ];
+
+    const state = { area: "", month: MONTHS[0].value, keyword: "", status: "all", items: [] };
+    let selectedFestivals = [];
+    try { selectedFestivals = JSON.parse(localStorage.getItem("selectedFestivals") || "[]"); } catch (e) { selectedFestivals = []; }
+
+    let map = null, markers = [], markerById = {}, infoWindow = null, searchSeq = 0;
+
+    /* ---------- 유틸 ---------- */
+    const $ = id => document.getElementById(id);
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+    function ymd(s) { return new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)); }
+    function fmtDate(s) { return s ? s.slice(4, 6) + "." + s.slice(6, 8) : ""; }
+    function todayStr() {
+      const d = new Date();
+      return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+    }
+    function getStatus(item) {
+      const t = todayStr();
+      if (item.eventenddate < t) return { key: "end", label: "종료" };
+      if (item.eventstartdate <= t) return { key: "live", label: "진행중" };
+      const diff = Math.ceil((ymd(item.eventstartdate) - ymd(t)) / 86400000);
+      return { key: "soon", label: "D-" + diff };
+    }
+    function regionName(item) {
+      const addr = (item.addr1 || "").trim();
+      return addr ? addr.split(" ")[0].replace("특별시", "").replace("광역시", "").replace("특별자치시", "").replace("특별자치도", "") : "";
+    }
+    let toastTimer;
+    function toast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+    }
+
+    /* ---------- 필터 UI ---------- */
+    function buildFilters() {
+      $("regionChips").innerHTML = REGIONS.map(r =>
+        `<button class="chip ${r.code === state.area ? "active" : ""}" data-code="${r.code}">${r.name}</button>`).join("");
+      $("monthSeg").innerHTML = MONTHS.map(m =>
+        `<button class="${m.value === state.month ? "active" : ""}" data-value="${m.value}">${m.name}</button>`).join("");
+
+      $("regionChips").addEventListener("click", e => {
+        const b = e.target.closest("button"); if (!b) return;
+        state.area = b.dataset.code;
+        document.querySelectorAll("#regionChips .chip").forEach(c => c.classList.toggle("active", c === b));
+        searchFestivals();
+      });
+      $("monthSeg").addEventListener("click", e => {
+        const b = e.target.closest("button"); if (!b) return;
+        state.month = b.dataset.value;
+        document.querySelectorAll("#monthSeg button").forEach(c => c.classList.toggle("active", c === b));
+        $("headerMonth").textContent = b.textContent;
+        searchFestivals();
+      });
+      $("statusChips").addEventListener("click", e => {
+        const b = e.target.closest("button"); if (!b) return;
+        state.status = b.dataset.status;
+        document.querySelectorAll("#statusChips button").forEach(c => c.classList.toggle("active", c === b));
+        renderList();
+      });
+      $("keyword").addEventListener("input", e => { state.keyword = e.target.value; renderList(); });
+      $("viewToggle").addEventListener("click", e => {
+        const b = e.target.closest("button"); if (!b) return;
+        setView(b.dataset.view);
+      });
+      $("goBtn").addEventListener("click", goToPlanner);
+      $("clearBtn").addEventListener("click", () => {
+        selectedFestivals = [];
+        saveSelected();
+        updateCart();
+        renderList();
+      });
+    }
+
+    function setView(v) {
+      $("main").dataset.view = v;
+      document.querySelectorAll("#viewToggle button").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+      if (v === "map" && map) {
+        setTimeout(() => { map.relayout(); fitMarkers(); }, 50);
+      }
+    }
+
+    /* ---------- 지도 ---------- */
+    function initMap() {
+      if (typeof kakao !== "undefined" && kakao.maps) {
+        kakao.maps.load(function () {
+          map = new kakao.maps.Map($("map"), { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 8 });
+          infoWindow = new kakao.maps.InfoWindow({ removable: false });
+          searchFestivals();
         });
       } else {
-        alert("Kakao Map API를 불러오지 못했습니다. 카카오 개발자 센터에서 '도메인 실행 환경'에 GitHub Pages 주소를 등록했는지 확인해주세요.");
+        $("mapFallback").style.display = "flex";
+        toast("지도를 불러오지 못했어요. 목록만 표시합니다.");
+        searchFestivals();
       }
-    };
-
-async function searchFestivals() {
-  const area = document.getElementById("areaSelect").value;
-  const month = document.getElementById("monthSelect").value;   // 예: 20261101
-  const listContainer = document.getElementById("festivalList");
-  listContainer.innerHTML = "데이터 조회 중...";
-
-  try {
-    // 선택한 월의 전월 1일 계산 (11월 선택 → 20261001)
-    const y = parseInt(month.substring(0, 4));
-    const m = parseInt(month.substring(4, 6));
-    const d = new Date(y, m - 2, 1);
-    const fromDate = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + "01";
-
-    const res = await fetch(`${GAS_WEB_APP_URL}?areaCode=${area}&eventStartDate=${fromDate}`);
-    const data = await res.json();
-    console.log("API 응답:", data);
-
-    // 오류 응답 처리
-    if (data.result === "ERROR") {
-      alert("서버 에러: " + data.message);
-      listContainer.innerHTML = "";
-      return;
     }
-    if (data.resultCode && data.resultCode !== "0000") {
-      alert("API 오류: " + data.resultCode + " / " + data.resultMsg);
-      listContainer.innerHTML = "";
-      return;
-    }
-    const hd = data.response && data.response.header;
-    if (hd && hd.resultCode !== "0000") {
-      alert("API 오류: " + hd.resultCode + " / " + hd.resultMsg);
-      listContainer.innerHTML = "";
-      return;
-    }
-
-    // 선택한 월에 열리는 축제만 거르기
-    const monthStart = month;                        // 20261101
-    const monthEnd = month.substring(0, 6) + "31";   // 20261131 (문자열 비교용)
-    let items = (data.response?.body?.items?.item || []);
-    if (!Array.isArray(items)) items = [items];      // 1건일 때 객체로 오는 경우 대비
-    items = items.filter(i => i.eventenddate >= monthStart && i.eventstartdate <= monthEnd);
-
-    document.getElementById("count").innerText = items.length;
-    listContainer.innerHTML = "";
-    clearMarkers();
-
-    if (items.length === 0) {
-      listContainer.innerHTML = "조회된 축제가 없습니다.";
-      return;
-    }
-
-    const bounds = new kakao.maps.LatLngBounds();
-    let markerCount = 0;
-
-    items.forEach(item => {
-      // 카드 생성 (좌표가 없어도 목록에는 표시)
-      const div = document.createElement("div");
-      div.className = "festival-card";
-
-      const alreadySelected = selectedFestivals.some(f => f.contentid === item.contentid);
-      if (alreadySelected) div.classList.add("selected");
-
-      div.innerHTML = `
-        <h3>${item.title}</h3>
-        <p>기간: ${item.eventstartdate} ~ ${item.eventenddate}</p>
-        <p>주소: ${item.addr1 || '주소 정보 없음'}</p>
-      `;
-
-      const btn = document.createElement("button");
-      btn.className = "btn";
-      btn.innerText = alreadySelected ? "담기 취소" : "일정에 담기";
-      btn.addEventListener("click", () => toggleSelect(item, btn));
-      div.appendChild(btn);
-      listContainer.appendChild(div);
-
-      // 지도 마커 생성 (좌표가 있을 때만)
-      if (item.mapx && item.mapy) {
-        const loc = new kakao.maps.LatLng(parseFloat(item.mapy), parseFloat(item.mapx));
-        bounds.extend(loc);
-        const marker = new kakao.maps.Marker({ position: loc, map: map, title: item.title });
-        markers.push(marker);
-        markerCount++;
-      }
-    });
-
-    if (markerCount > 0 && map) map.setBounds(bounds);
-
-  } catch (err) {
-    alert("데이터 로드 오류: " + err);
-  }
-}
-
-
     function clearMarkers() {
       markers.forEach(m => m.setMap(null));
       markers = [];
+      markerById = {};
+      if (infoWindow) infoWindow.close();
+    }
+    function fitMarkers() {
+      if (!map || markers.length === 0) return;
+      const bounds = new kakao.maps.LatLngBounds();
+      markers.forEach(m => bounds.extend(m.getPosition()));
+      map.setBounds(bounds);
+    }
+    function focusItem(item, fromMarker) {
+      document.querySelectorAll(".card.focused").forEach(c => c.classList.remove("focused"));
+      const card = document.querySelector(`.card[data-id="${item.contentid}"]`);
+      if (card) {
+        card.classList.add("focused");
+        if (fromMarker) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      const marker = markerById[item.contentid];
+      if (marker && map) {
+        infoWindow.setContent(`<div class="iw">${esc(item.title)}</div>`);
+        infoWindow.open(map, marker);
+        if (!fromMarker) map.panTo(marker.getPosition());
+      }
     }
 
-    function toggleSelect(item, btn) {
+    /* ---------- 데이터 조회 ---------- */
+    function showSkeleton() {
+      $("festivalList").innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+    }
+    function showState(msg, withSpinner) {
+      $("festivalList").innerHTML = `<div class="state-box">${withSpinner ? '<div class="spinner"></div>' : ""}<div>${msg}</div></div>`;
+    }
+
+    async function searchFestivals() {
+      const seq = ++searchSeq;
+      const list = $("festivalList");
+      showSkeleton();
+      $("count").textContent = "0";
+      clearMarkers();
+
+      try {
+        // 선택한 월의 전월 1일 계산 (11월 선택 → 20261001)
+        const month = state.month;
+        const y = parseInt(month.substring(0, 4));
+        const m = parseInt(month.substring(4, 6));
+        const d = new Date(y, m - 2, 1);
+        const fromDate = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + "01";
+
+        const res = await fetch(`${GAS_WEB_APP_URL}?areaCode=${state.area}&eventStartDate=${fromDate}`);
+        const data = await res.json();
+        if (seq !== searchSeq) return;   // 더 최근 검색이 있으면 무시
+        console.log("API 응답:", data);
+
+        // 오류 응답 처리
+        if (data.result === "ERROR") { showState("서버 오류가 발생했어요.<br>" + esc(data.message)); return; }
+        if (data.resultCode && data.resultCode !== "0000") { showState("API 오류: " + esc(data.resultCode + " / " + data.resultMsg)); return; }
+        const hd = data.response && data.response.header;
+        if (hd && hd.resultCode !== "0000") { showState("API 오류: " + esc(hd.resultCode + " / " + hd.resultMsg)); return; }
+
+        // 선택한 월에 열리는 축제만 거르기
+        const monthStart = month;
+        const monthEnd = month.substring(0, 6) + "31";
+        let items = data.response?.body?.items?.item || [];
+        if (!Array.isArray(items)) items = [items];
+        state.items = items.filter(i => i.eventenddate >= monthStart && i.eventstartdate <= monthEnd);
+
+        renderList(true);
+      } catch (err) {
+        if (seq !== searchSeq) return;
+        showState("데이터를 불러오지 못했어요.<br>" + esc(err));
+      }
+    }
+
+    /* ---------- 목록 렌더링 ---------- */
+    function renderList(fit) {
+      const kw = state.keyword.trim().toLowerCase();
+      const items = state.items.filter(i => {
+        const okKw = !kw || ((i.title || "") + " " + (i.addr1 || "")).toLowerCase().includes(kw);
+        const st = getStatus(i).key;
+        const okSt = state.status === "all" || st === state.status;
+        return okKw && okSt;
+      });
+
+      $("count").textContent = items.length;
+      clearMarkers();
+      const list = $("festivalList");
+      list.innerHTML = "";
+
+      if (items.length === 0) {
+        showState(state.items.length === 0 ? "이 조건에 해당하는 축제가 없어요.<br>지역이나 월을 바꿔 보세요." : "조건에 맞는 축제가 없어요.<br>검색어나 상태 필터를 바꿔 보세요.");
+        return;
+      }
+
+      items.forEach(item => {
+        const st = getStatus(item);
+        const isSel = selectedFestivals.some(f => f.contentid === item.contentid);
+        const card = document.createElement("div");
+        card.className = "card" + (isSel ? " selected" : "");
+        card.dataset.id = item.contentid;
+
+        const thumb = item.firstimage
+          ? `<img src="${esc(item.firstimage)}" alt="" loading="lazy" onerror="this.remove()">`
+          : "";
+        card.innerHTML = `
+          <div class="thumb"><svg class="ic ic-lg"><use href="#i-festival"/></svg>${thumb}</div>
+          <div class="card-body">
+            <div class="badge-row">
+              <span class="badge ${st.key}">${st.label}</span>
+              ${regionName(item) ? `<span class="badge region">${esc(regionName(item))}</span>` : ""}
+            </div>
+            <div class="card-title">${esc(item.title)}</div>
+            <div class="meta"><svg class="ic ic-sm"><use href="#i-calendar"/></svg><span>${fmtDate(item.eventstartdate)} ~ ${fmtDate(item.eventenddate)}</span></div>
+            <div class="meta"><svg class="ic ic-sm"><use href="#i-pin"/></svg><span>${esc(item.addr1 || "주소 정보 없음")}</span></div>
+          </div>`;
+
+        const btn = document.createElement("button");
+        btn.className = "add-btn";
+        setBtn(btn, isSel);
+        btn.addEventListener("click", e => { e.stopPropagation(); toggleSelect(item, card, btn); });
+        card.querySelector(".card-body").appendChild(btn);
+        card.addEventListener("click", () => focusItem(item, false));
+        list.appendChild(card);
+
+        // 지도 마커
+        if (map && item.mapx && item.mapy) {
+          const marker = new kakao.maps.Marker({
+            position: new kakao.maps.LatLng(parseFloat(item.mapy), parseFloat(item.mapx)),
+            map: map, title: item.title
+          });
+          kakao.maps.event.addListener(marker, "click", () => focusItem(item, true));
+          markers.push(marker);
+          markerById[item.contentid] = marker;
+        }
+      });
+
+      if (fit !== false) fitMarkers();
+    }
+
+    function setBtn(btn, selected) {
+      btn.innerHTML = selected
+        ? '<svg class="ic ic-sm"><use href="#i-check"/></svg>담김'
+        : '<svg class="ic ic-sm"><use href="#i-plus"/></svg>일정에 담기';
+    }
+
+    /* ---------- 선택 / 이동 ---------- */
+    function saveSelected() { localStorage.setItem("selectedFestivals", JSON.stringify(selectedFestivals)); }
+
+    function toggleSelect(item, card, btn) {
       const idx = selectedFestivals.findIndex(f => f.contentid === item.contentid);
       if (idx > -1) {
         selectedFestivals.splice(idx, 1);
-        btn.innerText = "일정에 담기";
-        btn.parentElement.classList.remove("selected");
+        card.classList.remove("selected");
+        setBtn(btn, false);
       } else {
         selectedFestivals.push({
           contentid: item.contentid,
           title: item.title,
           addr: item.addr1,
           mapx: parseFloat(item.mapx),
-          mapy: parseFloat(item.mapy)
+          mapy: parseFloat(item.mapy),
+          image: item.firstimage || "",
+          start: item.eventstartdate,
+          end: item.eventenddate
         });
-        btn.innerText = "담기 취소";
-        btn.parentElement.classList.add("selected");
+        card.classList.add("selected");
+        setBtn(btn, true);
       }
-      document.getElementById("cartCount").innerText = selectedFestivals.length;
+      saveSelected();
+      updateCart();
+    }
+
+    function updateCart() {
+      const n = selectedFestivals.length;
+      $("cartCount").textContent = n;
+      $("goBtn").disabled = n === 0;
+      $("clearBtn").style.display = n > 0 ? "inline-block" : "none";
+      if (n === 0) {
+        $("cartTitle").textContent = "선택한 축제가 없어요";
+        $("cartNames").textContent = "카드의 '일정에 담기'를 눌러 추가해 보세요";
+      } else {
+        $("cartTitle").textContent = n + "개 축제를 담았어요";
+        $("cartNames").textContent = selectedFestivals.map(f => f.title).join(" · ");
+      }
     }
 
     function goToPlanner() {
-      if (selectedFestivals.length === 0) {
-        alert("최소 1개 이상의 축제를 선택해주세요!");
-        return;
-      }
-      localStorage.setItem("selectedFestivals", JSON.stringify(selectedFestivals));
+      if (selectedFestivals.length === 0) { toast("최소 1개 이상의 축제를 선택해 주세요!"); return; }
+      saveSelected();
       location.href = "planner.html";
     }
+
+    /* ---------- 시작 ---------- */
+    window.onload = function () {
+      buildFilters();
+      updateCart();
+      initMap();
+    };
   </script>
 </body>
 </html>
