@@ -73,63 +73,98 @@
       }
     };
 
-    async function searchFestivals() {
-      const area = document.getElementById("areaSelect").value;
-      const month = document.getElementById("monthSelect").value;
-      const listContainer = document.getElementById("festivalList");
-      listContainer.innerHTML = "데이터 조회 중...";
+async function searchFestivals() {
+  const area = document.getElementById("areaSelect").value;
+  const month = document.getElementById("monthSelect").value;   // 예: 20261101
+  const listContainer = document.getElementById("festivalList");
+  listContainer.innerHTML = "데이터 조회 중...";
 
-      try {
-        const res = await fetch(`${GAS_WEB_APP_URL}?areaCode=${area}&eventStartDate=${month}`);
-        const data = await res.json();
+  try {
+    // 선택한 월의 전월 1일 계산 (11월 선택 → 20261001)
+    const y = parseInt(month.substring(0, 4));
+    const m = parseInt(month.substring(4, 6));
+    const d = new Date(y, m - 2, 1);
+    const fromDate = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + "01";
 
-        if (data.result === "ERROR") {
-          alert("API 에러: " + data.message);
-          return;
-        }
+    const res = await fetch(`${GAS_WEB_APP_URL}?areaCode=${area}&eventStartDate=${fromDate}`);
+    const data = await res.json();
+    console.log("API 응답:", data);
 
-        const items = data.response?.body?.items?.item || [];
-        document.getElementById("count").innerText = items.length;
-        listContainer.innerHTML = "";
-        clearMarkers();
-
-        if (items.length === 0) {
-          listContainer.innerHTML = "조회된 축제가 없습니다.";
-          return;
-        }
-
-        const bounds = new kakao.maps.LatLngBounds();
-
-        items.forEach(item => {
-          if (!item.mapx || !item.mapy) return;
-
-          const lat = parseFloat(item.mapy);
-          const lng = parseFloat(item.mapx);
-          const loc = new kakao.maps.LatLng(lat, lng);
-          bounds.extend(loc);
-
-          // 지도 마커 생성
-          const marker = new kakao.maps.Marker({ position: loc, map: map, title: item.title });
-          markers.push(marker);
-
-          // 카드 생성
-          const div = document.createElement("div");
-          div.className = "festival-card";
-          div.innerHTML = `
-            <h3>${item.title}</h3>
-            <p>기간: ${item.eventstartdate} ~ ${item.eventenddate}</p>
-            <p>주소: ${item.addr1 || '주소 정보 없음'}</p>
-            <button class="btn" onclick='toggleSelect(${JSON.stringify(item)}, this)'>일정에 담기</button>
-          `;
-          listContainer.appendChild(div);
-        });
-
-        if (items.length > 0 && map) map.setBounds(bounds);
-
-      } catch (err) {
-        alert("데이터 로드 오류: " + err);
-      }
+    // 오류 응답 처리
+    if (data.result === "ERROR") {
+      alert("서버 에러: " + data.message);
+      listContainer.innerHTML = "";
+      return;
     }
+    if (data.resultCode && data.resultCode !== "0000") {
+      alert("API 오류: " + data.resultCode + " / " + data.resultMsg);
+      listContainer.innerHTML = "";
+      return;
+    }
+    const hd = data.response && data.response.header;
+    if (hd && hd.resultCode !== "0000") {
+      alert("API 오류: " + hd.resultCode + " / " + hd.resultMsg);
+      listContainer.innerHTML = "";
+      return;
+    }
+
+    // 선택한 월에 열리는 축제만 거르기
+    const monthStart = month;                        // 20261101
+    const monthEnd = month.substring(0, 6) + "31";   // 20261131 (문자열 비교용)
+    let items = (data.response?.body?.items?.item || []);
+    if (!Array.isArray(items)) items = [items];      // 1건일 때 객체로 오는 경우 대비
+    items = items.filter(i => i.eventenddate >= monthStart && i.eventstartdate <= monthEnd);
+
+    document.getElementById("count").innerText = items.length;
+    listContainer.innerHTML = "";
+    clearMarkers();
+
+    if (items.length === 0) {
+      listContainer.innerHTML = "조회된 축제가 없습니다.";
+      return;
+    }
+
+    const bounds = new kakao.maps.LatLngBounds();
+    let markerCount = 0;
+
+    items.forEach(item => {
+      // 카드 생성 (좌표가 없어도 목록에는 표시)
+      const div = document.createElement("div");
+      div.className = "festival-card";
+
+      const alreadySelected = selectedFestivals.some(f => f.contentid === item.contentid);
+      if (alreadySelected) div.classList.add("selected");
+
+      div.innerHTML = `
+        <h3>${item.title}</h3>
+        <p>기간: ${item.eventstartdate} ~ ${item.eventenddate}</p>
+        <p>주소: ${item.addr1 || '주소 정보 없음'}</p>
+      `;
+
+      const btn = document.createElement("button");
+      btn.className = "btn";
+      btn.innerText = alreadySelected ? "담기 취소" : "일정에 담기";
+      btn.addEventListener("click", () => toggleSelect(item, btn));
+      div.appendChild(btn);
+      listContainer.appendChild(div);
+
+      // 지도 마커 생성 (좌표가 있을 때만)
+      if (item.mapx && item.mapy) {
+        const loc = new kakao.maps.LatLng(parseFloat(item.mapy), parseFloat(item.mapx));
+        bounds.extend(loc);
+        const marker = new kakao.maps.Marker({ position: loc, map: map, title: item.title });
+        markers.push(marker);
+        markerCount++;
+      }
+    });
+
+    if (markerCount > 0 && map) map.setBounds(bounds);
+
+  } catch (err) {
+    alert("데이터 로드 오류: " + err);
+  }
+}
+
 
     function clearMarkers() {
       markers.forEach(m => m.setMap(null));
