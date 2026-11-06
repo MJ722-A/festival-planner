@@ -529,11 +529,16 @@
         const hd = data.response && data.response.header;
         if (hd && hd.resultCode !== "0000") { showState("API 오류: " + esc(hd.resultCode + " / " + hd.resultMsg)); return; }
 
-        const monthStart = month;
-        const monthEnd = month.substring(0, 6) + "31";
         let items = data.response?.body?.items?.item || [];
         if (!Array.isArray(items)) items = [items];
-        state.items = items.filter(i => i.eventenddate >= monthStart && i.eventstartdate <= monthEnd);
+
+        // 선택한 월에 포함되거나, 날짜 데이터가 비어있는 항목도 유연하게 포함하도록 보완
+        const monthStart = month;
+        const monthEnd = month.substring(0, 6) + "31";
+        state.items = items.filter(i => {
+          if (!i.eventstartdate || !i.eventenddate) return true;
+          return i.eventenddate >= monthStart && i.eventstartdate <= monthEnd;
+        });
 
         renderList(true);
       } catch (err) {
